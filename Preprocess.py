@@ -1,0 +1,1 @@
+DatasetPath=r"C:\Users\Hamzah\Desktop\HYP\AAI\archive\dataset\train"
