@@ -26,12 +26,16 @@ class Encoder(nn.Module):
         #NOTE: major padding not needed since we know images have black bordes
         nn.Conv2d(in_channels=3,out_channels=256,kernel_size=3,stride=2,padding=1),
         nn.ReLU(),
+        nn.BatchNorm2d(256),
         nn.Conv2d(in_channels=256,out_channels=128,kernel_size=3,stride=2,padding=1),
         nn.ReLU(),
+        nn.BatchNorm2d(128),
         nn.Conv2d(in_channels=128,out_channels=128,kernel_size=3,stride=2,padding=1),
         nn.ReLU(),
+        nn.BatchNorm2d(128),
         nn.Conv2d(in_channels=128,out_channels=64,kernel_size=3,stride=2,padding=1),
         nn.ReLU(),
+        nn.BatchNorm2d(64),
         nn.Flatten()
 
         )
