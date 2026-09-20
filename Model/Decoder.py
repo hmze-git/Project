@@ -58,3 +58,4 @@ class Decoder(nn.Module):
         return mu,sigma
 
       
+    #https://layercal.com/  helpful for visualisation of where params might bee too muchg
