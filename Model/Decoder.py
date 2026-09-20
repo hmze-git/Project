@@ -4,7 +4,7 @@ from torch import nn
 
 
 
-class Encoder(nn.Module):
+class Decoder(nn.Module):
 
     #Expected size is 224x224
     def __init__(self,inputChannels=3,latentDim=64):
