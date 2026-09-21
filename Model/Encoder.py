@@ -47,14 +47,20 @@ class Encoder(nn.Module):
         self.sigma=nn.Linear(in_features=rdim,out_features=latentDim)
 
 
+    #perform network forward pass then do the reparametrisation trick
+    #to allow gradients to flow free of random ness
+
     def forward(self,x):
         outFlat=self.Encode(x)
 
-        #Both of these are now in the latent dim
-        #return to autoencoder to apply epsion etc
-        mu=self.mu(outFlat)
-        sigma=self.sigma(outFlat)
+        mu=self.Mu(outFlat)
+        zLogVar=self.sigma(outFlat)
 
-        return mu,sigma
+        #epsilon to sample from Gauss Normal
+        epsilon=torch.randn_like(zLogVar)
+        
+        zReparam=mu+torch.exp(zLogVar*0.5)*epsilon
 
-      
+        return zReparam,mu,zLogVar
+
+
