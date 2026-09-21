@@ -7,7 +7,7 @@ from torch import nn
 class Decoder(nn.Module):
 
     #Expected size is 224x224
-    def __init__(self,inputChannels=3,latentDim=64):
+    def __init__(self,inputChannels=3,latentDim=64,rdim=32*7*7,shapeLatent=(32,7,7)):
         super().__init__()
 
         #Win: Input width
@@ -18,28 +18,13 @@ class Decoder(nn.Module):
 
         #WidthOut=((Win-K+2P)/S)+1
         #HeightOut=((Hin-K+2P)/S)+1
-
-        self.Encode=nn.Sequential(
+        self.latenDim2Hidden=nn.Linear(in_features=latentDim,out_features=rdim)
+       
+        self.Decode=nn.Sequential(
         #convLayers
-        #NOTE:Conv layers in pytorch take number of channels in and how many out
-        #How many out specifies how many filters to apply
-        #NOTE: major padding not needed since we know images have black bordes
-        nn.Conv2d(in_channels=inputChannels,out_channels=256,kernel_size=3,stride=2,padding=1),
-        nn.ReLU(),
-        nn.BatchNorm2d(256),
-        nn.Conv2d(in_channels=256,out_channels=128,kernel_size=3,stride=2,padding=1),
-        nn.ReLU(),
-        nn.BatchNorm2d(128),
-        nn.Conv2d(in_channels=128,out_channels=128,kernel_size=3,stride=2,padding=1),
-        nn.ReLU(),
-        nn.BatchNorm2d(128),
-        nn.Conv2d(in_channels=128,out_channels=64,kernel_size=3,stride=2,padding=1),
-        nn.ReLU(),
-        nn.BatchNorm2d(64),
-        nn.Conv2d(in_channels=64,out_channels=32,kernel_size=3,stride=2,padding=1),
-        nn.ReLU(),
-        nn.BatchNorm2d(32),
-        nn.Flatten(),
+        #batch counts so dont use dim 0 or else it will break
+        nn.Unflatten(dim=1,unflattened_size=shapeLatent),
+            
         #Caclculate Channels*Height*width 
  
         )

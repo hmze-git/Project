@@ -7,7 +7,7 @@ from torch import nn
 class Encoder(nn.Module):
 
     #Expected size is 224x224
-    def __init__(self,inputChannels=3,latentDim=64):
+    def __init__(self,inputChannels=3,latentDim=64,rdim=32*7*7):
         super().__init__()
 
         #Win: Input width
@@ -43,8 +43,8 @@ class Encoder(nn.Module):
         #Caclculate Channels*Height*width 
  
         )
-        self.Mu=nn.Linear(in_features=32*7*7,out_features=latentDim)
-        self.sigma=nn.Linear(in_features=32*7*7,out_features=latentDim)
+        self.Mu=nn.Linear(in_features=rdim,out_features=latentDim)
+        self.sigma=nn.Linear(in_features=rdim,out_features=latentDim)
 
 
     def forward(self,x):
