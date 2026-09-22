@@ -15,6 +15,7 @@ def processDataset():
 
         for retType in dir.iterdir():
             os.makedirs(f"{str(dir.resolve())}(Processed)/{retType.name}",exist_ok=True)
+            count=0
             for retImg in retType.iterdir():
 
                     img = cv.imread(str(retImg.resolve()))
@@ -25,9 +26,10 @@ def processDataset():
 
                     resizeComp=cv.resize(img,(dimX,dimY))
 
-                    clearedResize=cv.medianBlur(resizeComp,3)
 
-                    cv.imwrite(f'{str(dir.resolve())}(Processed)/{retType.name}/{retImg.name}.png',clearedResize)
+
+                    cv.imwrite(f'{str(dir.resolve())}(Processed)/{retType.name}/{count}.png',resizeComp)
+                    count+=1
 
 
 processDataset()
