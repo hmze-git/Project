@@ -17,7 +17,7 @@ ZDIM=20 # Compresses the latent space
 LR=1e-4 #Karparthy constant
 BATCHSIZE=32
 
-NUMEPOCH=50
+NUMEPOCH=5
 
 
 #DATASER

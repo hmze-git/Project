@@ -16,6 +16,7 @@ class RetinalDiseaseLoader(Dataset):
         self.images=os.listdir(self.rootDir)
         self.transform=v2.Compose([
             v2.RandomRotation(15),
+            v2.ToTensor(),
         ])
         self.trainMode=trainMode
 
