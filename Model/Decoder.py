@@ -25,28 +25,24 @@ class Decoder(nn.Module):
         #batch counts so dont use dim 0 or else it will break
         nn.Linear(in_features=latentDim,out_features=rdim),
         nn.Unflatten(dim=1,unflattened_size=shapeLatent),
-        nn.ConvTranspose2d(in_channels=self.channel,out_channels=64,kernel_size=3,stride=2,padding=1),
+        nn.ConvTranspose2d(in_channels=self.channel,out_channels=64,kernel_size=3,stride=2,padding=1,output_padding=1),
         nn.BatchNorm2d(num_features=64),
         nn.ReLU(),
-        nn.ConvTranspose2d(in_channels=64,out_channels=128,kernel_size=3,stride=2),
+        nn.ConvTranspose2d(in_channels=64,out_channels=128,kernel_size=3,stride=2,padding=1,output_padding=1),
         nn.BatchNorm2d(num_features=128),
         nn.ReLU(),
-        nn.ConvTranspose2d(in_channels=128,out_channels=128,kernel_size=3,stride=2),
+        nn.ConvTranspose2d(in_channels=128,out_channels=128,kernel_size=3,stride=2,padding=1,output_padding=1),
         nn.BatchNorm2d(num_features=128),
         nn.ReLU(),
-        nn.ConvTranspose2d(in_channels=128,out_channels=256,kernel_size=3,stride=2),
+        nn.ConvTranspose2d(in_channels=128,out_channels=256,kernel_size=3,stride=2,padding=1,output_padding=1),
         nn.ReLU(),
         nn.BatchNorm2d(num_features=256),
-        nn.ConvTranspose2d(in_channels=256,out_channels=inputChannels,kernel_size=3,stride=2,output_padding=1),
-        nn.BatchNorm2d(num_features=inputChannels),
+        nn.ConvTranspose2d(in_channels=256,out_channels=inputChannels,kernel_size=3,stride=2,padding=1,output_padding=1),
         nn.Sigmoid(),
 
         #Caclculate Channels*Height*width 
  
         )
-        self.Mu=nn.Linear(in_features=32*7*7,out_features=latentDim)
-        self.sigma=nn.Linear(in_features=32*7*7,out_features=latentDim)
-
 
     def forward(self,x):
         sigmoidOut=self.Decode(x)

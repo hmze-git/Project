@@ -13,11 +13,11 @@ from torch import optim,nn
 DEVICE=torch.device("cuda" if torch.cuda.is_available() else "cpu")
 INPUTDIM=784
 HDIM=200
-ZDIM=20 # Compresses the latent space
+ZDIM=64 # Compresses the latent space
 LR=1e-4 #Karparthy constant
 BATCHSIZE=32
 
-NUMEPOCH=5
+NUMEPOCH=1000
 
 
 #DATASER

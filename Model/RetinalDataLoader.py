@@ -14,10 +14,16 @@ class RetinalDiseaseLoader(Dataset):
         super().__init__()
         self.rootDir=rootDir
         self.images=os.listdir(self.rootDir)
-        self.transform=v2.Compose([
-            v2.RandomRotation(15),
-            v2.ToTensor(),
-        ])
+
+        if trainMode==True:
+            self.transform=v2.Compose([
+                v2.RandomRotation(15),
+                v2.ToTensor(),
+            ])
+        else:
+            self.transform=v2.Compose([
+                v2.ToTensor(),
+            ])
         self.trainMode=trainMode
 
     def __getitem__(self, index):
@@ -25,8 +31,8 @@ class RetinalDiseaseLoader(Dataset):
         imagePath=os.path.join(self.rootDir,self.images[index])
         image=np.array(Image.open(imagePath))
 
-        if self.trainMode:
-            image=self.transform(image)
+
+        image=self.transform(image)
         return image
 
     def __len__(self):
