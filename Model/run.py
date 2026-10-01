@@ -12,6 +12,8 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torchvision import datasets
 from torchvision.utils import save_image
+from torchmetrics import classification
+from sklearn.metrics import confusion_matrix,ConfusionMatrixDisplay
 from torchvision.transforms import v2 
 import matplotlib.pyplot as plt
 
@@ -51,8 +53,9 @@ anomalyDatasetLoad=datasets.ImageFolder(r'C:\Users\hamza\OneDrive\Desktop\HOnour
 
 trainSet=DataLoader(trainDatasetLoad,batch_size=BATCHSIZE,shuffle=True)
 validSet=DataLoader(validationDatasetLoad,batch_size=BATCHSIZE,shuffle=False)
-anomalyset=DataLoader(anomalyDatasetLoad,batch_size=BATCHSIZE,shuffle=True)
+anomalyset=DataLoader(anomalyDatasetLoad,batch_size=1,shuffle=True)
 
+print(anomalyDatasetLoad.class_to_idx)
 #MODEL DEFINITION
 
 AnomalyVAE=AnomalyVariationalAutoEncoder(INPUTCHANNELS,LATENTDIM,RDIM,LATENTSHAPE)
@@ -62,7 +65,7 @@ AnomalyVAE=AnomalyVariationalAutoEncoder(INPUTCHANNELS,LATENTDIM,RDIM,LATENTSHAP
 #optimisers/early stopping/loss
 
 lossFn=torch.nn.MSELoss(reduction="sum")
-
+lossThresh=torch.nn.MSELoss(reduction="none")
 
 optimiser=Adam(AnomalyVAE.parameters(),lr=LR)
 
@@ -76,6 +79,10 @@ seed = 67
 torch.manual_seed(seed)
 torch.cuda.manual_seed(seed)
 torch.backends.cudnn.deterministic = True
+
+#Metrics
+accuracyMetric=classification.Accuracy(task='binary')
+
 
 
 def sigmoidKlAnnealing(timeStep,slope=1,start=None):
@@ -228,8 +235,98 @@ def trainingLoop():
     plotChart('Epoch','KL Loss','VAE KL Loss',trainKLL,validKLL,['train','val'],'trainVSvalKLL.png')
     plotChart('Epoch','Total Loss','VAE Total Loss',trainTotalL,validTotalL,['train','val'],'trainVSvalTOT.png')
 
-def anomalyCheck(E):
-    pass
+def retrievePercentiel(modelFillePath,percentile=0.95):
+
+    loadDict=torch.load(modelFillePath,map_location=DEVICE)
+    AnomalyVAE.load_state_dict(loadDict['modelStateDict'])
+
+    AnomalyVAE.eval()
+
+    listReconLoss=[]
+    for batch,x in enumerate(validSet):
+
+        x=x.to(DEVICE)
+
+        xReconed,mu,sigman=AnomalyVAE(x)
+
+        #get the reconstruction loss for the  batch of images
+        reconLoss=lossThresh(xReconed,x)
+        #Reduce to be reconstruction loss for one image
+
+        #beacause redeuce is none end up with loss for ever pixel in every chanell etc
+        #so flatten it all down to 1 massive tensor dim
+        #sum up on that dim  then we end up with the recon loss for eahc iamge in the batch
+        perImageLoss=reconLoss.flatten(1).sum(dim=1)
+
+        listReconLoss.append(perImageLoss)
+
+
+    #take arrays of loss and put them in one lonnnng tensor
+
+    allReconLoss=torch.cat(listReconLoss)
+
+    threshold=torch.quantile(allReconLoss,percentile)
+    return threshold
+
+
+
+
+def anomalyCheck(modelFillePath,threshhold):
+
+    loadDict=torch.load(modelFillePath,map_location=DEVICE)
+    AnomalyVAE.load_state_dict(loadDict['modelStateDict'])
+   
+    AnomalyVAE.eval()
+   
+    numCorrect=[]
+    preds=[]
+    true=[]
+    for batch,(x,y) in enumerate(anomalyset):
+
+    
+        x=x.to(DEVICE)
+   
+        xReconed,mu,sigman=AnomalyVAE(x)
+   
+        #get the reconstruction loss for the  batch of images
+        reconLoss=lossThresh(xReconed,x)
+        #Reduce to be reconstruction loss for one image
+   
+        #beacause redeuce is none end up with loss for ever pixel in every chanell etc
+        #so flatten it all down to 1 massive tensor dim
+        #sum up on that dim  then we end up with the recon loss for eahc iamge in the batch
+        imageLoss=reconLoss.flatten(1).sum(dim=1)
+
+        #mark as anomaly
+        #0 disease 
+        #1 normal
+        if imageLoss>threshhold:
+            preds.append(0)
+
+        else:
+            preds.append(1)
+        true.append(y)
+
+
+    preds=torch.tensor(preds)
+    true=torch.tensor(true)
+
+
+    #get the metric
+    acc=accuracyMetric(preds,true)
+
+    confMatrix=confusion_matrix(true,preds,labels=[0,1])
+    disp=ConfusionMatrixDisplay(confMatrix,display_labels=[0,1])
+    disp.plot(cmap='Reds')
+    plt.savefig('confMat.png')
+    plt.show()
+    plt.clf()
+    print(f"Accuracy is {acc}")
+
+
+   
+
+    
 
 
 
@@ -274,5 +371,7 @@ def sampling(epoch,numSave=5):
 
 
 
-trainingLoop()
-sampling(210)
+#trainingLoop()
+#sampling(210)
+t=retrievePercentiel('bestModel.tar',0.95)
+anomalyCheck('bestModel.tar',t)
