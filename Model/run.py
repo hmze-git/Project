@@ -82,6 +82,8 @@ torch.backends.cudnn.deterministic = True
 
 #Metrics
 accuracyMetric=classification.Accuracy(task='binary')
+precisionMetric=classification.Precision(task='binary')
+recallMetric=classification.Recall(task='binary')
 
 
 
@@ -187,6 +189,8 @@ def validationStep(epoch,BETA):
 
 def plotChart(xLab,yLab,title,arr1,arr2,arrLegend,pathSave):
 
+    
+
     plt.title(title)
     plt.plot(arr1)
     plt.plot(arr2)
@@ -208,16 +212,20 @@ def trainingLoop():
     validKLL=[]
     validTotalL=[]
 
+    accTotal=[]
+    precisionTotal=[]
+    recallTotal=[]
 
     bestValidationLoss=float('inf') # absolute biggest loss value possible
     for E in range(NUMEPOCHS):
        ## BETA=sigmoidKlAnnealing(E,0.1,100)
       ##  BETA=min(BETACLAMP,BETA) #clamp it because when beta gets close to 1 alot of reconstruction accuracy is lost
         
-        print(BETA)
+    
         trRec,trKL,trTot=trainingStep(E,BETA)
         vlRec,vlKL,vlTot=validationStep(E,BETA)
-
+        thresh=retrievePercentiel(None,0.95)
+        acc,prec,rec=anomalyCheck(E,None,thresh)
         #append the values to array to use in charts later
         trainReconL.append(trRec)
         trainKLL.append(trKL)
@@ -227,6 +235,10 @@ def trainingLoop():
         validKLL.append(vlKL)
         validTotalL.append(vlTot)
 
+        accTotal.append(acc)
+        precisionTotal.append(prec)
+        recallTotal.append(rec)
+
         if vlTot<bestValidationLoss:
             savingModel(E,AnomalyVAE,vlTot,optimiser,'bestModel.tar')
             bestValidationLoss=vlTot
@@ -234,11 +246,13 @@ def trainingLoop():
     plotChart('Epoch','Reconstruction Loss','VAE Recon Loss',trainReconL,validReconL,['train','val'],'trainVSvalRecon.png')
     plotChart('Epoch','KL Loss','VAE KL Loss',trainKLL,validKLL,['train','val'],'trainVSvalKLL.png')
     plotChart('Epoch','Total Loss','VAE Total Loss',trainTotalL,validTotalL,['train','val'],'trainVSvalTOT.png')
+    plotChart("Epoch",'Accuracy',"Anomaly Detection Accuracy",accTotal,[],['Test'],'Accuracy Test')
 
 def retrievePercentiel(modelFillePath,percentile=0.95):
 
-    loadDict=torch.load(modelFillePath,map_location=DEVICE)
-    AnomalyVAE.load_state_dict(loadDict['modelStateDict'])
+    if modelFillePath is not None:
+        loadDict=torch.load(modelFillePath,map_location=DEVICE)
+        AnomalyVAE.load_state_dict(loadDict['modelStateDict'])
 
     AnomalyVAE.eval()
 
@@ -271,14 +285,15 @@ def retrievePercentiel(modelFillePath,percentile=0.95):
 
 
 
-def anomalyCheck(modelFillePath,threshhold):
+def anomalyCheck(epoch,modelFillePath,threshhold):
 
-    loadDict=torch.load(modelFillePath,map_location=DEVICE)
-    AnomalyVAE.load_state_dict(loadDict['modelStateDict'])
+    if modelFillePath is not None:
+        loadDict=torch.load(modelFillePath,map_location=DEVICE)
+        AnomalyVAE.load_state_dict(loadDict['modelStateDict'])
    
     AnomalyVAE.eval()
    
-    numCorrect=[]
+
     preds=[]
     true=[]
     for batch,(x,y) in enumerate(anomalyset):
@@ -308,23 +323,39 @@ def anomalyCheck(modelFillePath,threshhold):
         true.append(y)
 
 
+
+
     preds=torch.tensor(preds)
     true=torch.tensor(true)
 
-
     #get the metric
-    acc=accuracyMetric(preds,true)
+    accuracyMetric.update(preds,true)
+    precisionMetric.update(preds,true)
+    recallMetric.update(preds,true)
 
-    confMatrix=confusion_matrix(true,preds,labels=[0,1])
-    disp=ConfusionMatrixDisplay(confMatrix,display_labels=[0,1])
-    disp.plot(cmap='Reds')
-    plt.savefig('confMat.png')
-    plt.show()
-    plt.clf()
-    print(f"Accuracy is {acc}")
+    acc=accuracyMetric.compute().item()
+    recall=recallMetric.compute().item()
+    precision=precisionMetric.compute().item()
 
 
-   
+
+    #clear metrics for next epoch
+
+    accuracyMetric.reset()
+    recallMetric.reset()
+    precisionMetric.reset()
+    if epoch is not None:
+        print(f"Epoch {epoch}->Accuracy: {acc} | Precision: {precision} | Recall: {recall}")  
+    else:
+        print(f"Peak -> Accuracy:{acc} | Precision:{precision} | Recall:{recall}")
+        confMatrix=confusion_matrix(true,preds,labels=[0,1])
+        disp=ConfusionMatrixDisplay(confMatrix,display_labels=[0,1])
+        disp.plot(cmap='Blues')
+        plt.savefig('confMat.png')
+        plt.show()
+        plt.clf()
+ 
+    return acc,precision,recall
 
     
 
@@ -371,7 +402,9 @@ def sampling(epoch,numSave=5):
 
 
 
-#trainingLoop()
-#sampling(210)
+trainingLoop()
+sampling(210)
 t=retrievePercentiel('bestModel.tar',0.95)
-anomalyCheck('bestModel.tar',t)
+anomalyCheck(None,'bestModel.tar',t)
+
+   
