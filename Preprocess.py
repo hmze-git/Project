@@ -2,7 +2,7 @@ from pathlib import Path
 import cv2 as cv
 import os
 import matplotlib.pyplot as plt
-DatasetPath=r"C:\Users\hamza\OneDrive\Desktop\HOnours\Advanced Ai\Proj Data\archive\dataset"
+DatasetPath=r"C:\Users\Hamzah\Desktop\HYP\Dataset\AI\New folder"
 
 dimX=224
 dimY=224
