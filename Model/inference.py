@@ -564,7 +564,54 @@ def predictCNN(modelPath):
             print("Predicting image as Diseased")
         else:
             print("Predicting image as Healthy")
+
+def predictVAE(modelPath):
+
+     
+    if modelPath is not None:
+            loadDict=torch.load(modelPath,map_location=DEVICE)
+            detectionVAE=AnomalyVariationalAutoEncoder(INPUTCHANNELS,LATENTDIM,RDIM,LATENTSHAPE)
+            detectionVAE.load_state_dict(loadDict['modelStateDict'])
+            detectionVAE=detectionVAE.to(DEVICE)
+    else:
+        return
+    root=tk.Tk()
+    root.withdraw()
+    path=filedialog.askopenfilename(
+        title='Select a file',
+    )
+    tensorIM=loadImage(path)
+
+
+    #Need dataset to compute thresh
+    validationDatasetLoad=RetinalDiseaseLoader(VAETEST,False)
+    validSet=DataLoader(validationDatasetLoad,batch_size=BATCHSIZE,shuffle=False)
+    lossThresh=torch.nn.MSELoss(reduction="none")
+
+    thresh=retrievePercentiel(modelPath,detectionVAE,validSet,lossThresh,0.95)
+    tensorIM=tensorIM.to(DEVICE)
    
+    xReconed,mu,sigman=detectionVAE(tensorIM)
+   
+        #get the reconstruction loss for the  batch of images
+    reconLoss=lossThresh(xReconed,tensorIM)
+        #Reduce to be reconstruction loss for one image
+   
+        #beacause redeuce is none end up with loss for ever pixel in every chanell etc
+        #so flatten it all down to 1 massive tensor dim
+        #sum up on that dim  then we end up with the recon loss for eahc iamge in the batch
+    imageLoss=reconLoss.flatten(1).sum(dim=1)
+
+        #mark as anomaly
+        #0 disease 
+        #1 normal
+    if imageLoss>thresh:
+            print("Predicting image as Diseased")
+    else:
+            print("Predicting image as Healthy")
+
+
+    
 def generate(modelPath):
             
     if modelPath is not None:
@@ -614,7 +661,7 @@ def main():
             case "2":
                 trainCNN()
             case "3":
-                predict_vae()
+                predictVAE(VAEBEST)
             case "4":
                 predictCNN(CNNBEST)
             case "5":

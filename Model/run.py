@@ -371,29 +371,16 @@ def sampling(epoch,numSave=5):
         x=x.to(DEVICE)
         z = torch.randn(BATCHSIZE, LATENTDIM)  # sample from gaus normal and see if we can get good looking recons
         z=z.to(DEVICE)
-        x_generated,mu,sigma = AnomalyVAE(x) 
+        xGenerated,mu,sigma = AnomalyVAE(x) 
  
 
-        output=x_generated.view(-1,3,224,224)
+        output=xGenerated.view(-1,3,224,224)
 
-        n=5
-        fig,axes=plt.subplots(2,n,figsize=(15,16))
+
 
         x=x.cpu()
         output=output.cpu()
             
-        for i in range(n):
-            axes[0, i].imshow(x[i].permute(1, 2, 0))      # original
-            axes[0, i].set_title("Original")
-            axes[0, i].axis('off')
-
-            axes[1, i].imshow(output[i].permute(1, 2, 0))  # reconstruction
-            axes[1, i].set_title("Reconstructed")
-            axes[1, i].axis('off')
-
-        plt.tight_layout()
-        plt.savefig("recon_check.png")
-        plt.clf()
         save_image(output,f"Generated{epoch}.png")
 
         randomSample=AnomalyVAE.decoder(z)
