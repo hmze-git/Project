@@ -13,7 +13,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torchvision import datasets
 from torchvision.utils import save_image
 from torchmetrics import classification
-from sklearn.metrics import confusion_matrix,ConfusionMatrixDisplay
+from sklearn.metrics import confusion_matrix,ConfusionMatrixDisplay,precision_score,recall_score
 from torchvision.transforms import v2 
 import matplotlib.pyplot as plt
 
@@ -31,23 +31,27 @@ RECONSCALEFIX=224*224*3 #divide by this so that the KL loss wont dominate when w
 
 #0.001
 LR=1e-3
-
-
 BETA=20
 NUMEPOCHS=210
 
 
+#DATASETLOCATIONS
+
 #DATASET LOADER
-trainDatasetLoad=RetinalDiseaseLoader(r'C:\Users\hamza\OneDrive\Desktop\HOnours\Advanced Ai\Proj Data\archive\process2\train(Processed)\Normal',True)
-validationDatasetLoad=RetinalDiseaseLoader(r'C:\Users\hamza\OneDrive\Desktop\HOnours\Advanced Ai\Proj Data\archive\process2\val(Processed)\Normal',False)
+trainDatasetLoad=RetinalDiseaseLoader(r'C:\Users\Hamzah\Desktop\HYP\Dataset\AI\process2\train(Processed)\Normal',True)
+validationDatasetLoad=RetinalDiseaseLoader(r'C:\Users\Hamzah\Desktop\HYP\Dataset\AI\process2\val(Processed)\Normal',False)
+
+
+
 
 transform=v2.Compose([
     v2.RandomRotation(15),
     v2.ToTensor(),
 ])
 
-anomalyDatasetLoad=datasets.ImageFolder(r'C:\Users\hamza\OneDrive\Desktop\HOnours\Advanced Ai\Proj Data\archive\process2\trainAnomaly',transform)
+anomalyDatasetLoad=datasets.ImageFolder(r'C:\Users\Hamzah\Desktop\HYP\Dataset\AI\process2\trainAnomaly',transform)
 
+anomalyHoldoutsetLoad=datasets.ImageFolder(r'C:\Users\Hamzah\Desktop\HYP\Dataset\AI\testGuac(Processed)',transform)
 
 
 
@@ -55,7 +59,10 @@ trainSet=DataLoader(trainDatasetLoad,batch_size=BATCHSIZE,shuffle=True)
 validSet=DataLoader(validationDatasetLoad,batch_size=BATCHSIZE,shuffle=False)
 anomalyset=DataLoader(anomalyDatasetLoad,batch_size=1,shuffle=True)
 
+anomalHolSet=DataLoader(anomalyHoldoutsetLoad,batch_size=1,shuffle=True)
+
 print(anomalyDatasetLoad.class_to_idx)
+print(anomalyHoldoutsetLoad.class_to_idx)
 #MODEL DEFINITION
 
 AnomalyVAE=AnomalyVariationalAutoEncoder(INPUTCHANNELS,LATENTDIM,RDIM,LATENTSHAPE)
@@ -69,7 +76,7 @@ lossThresh=torch.nn.MSELoss(reduction="none")
 
 optimiser=Adam(AnomalyVAE.parameters(),lr=LR)
 
-lrScheduler=ReduceLROnPlateau(optimizer=optimiser,mode='min',patience=40,factor=0.5)
+
 
 
 
@@ -85,15 +92,12 @@ accuracyMetric=classification.Accuracy(task='binary')
 precisionMetric=classification.Precision(task='binary')
 recallMetric=classification.Recall(task='binary')
 
+#Test Metrics
+
+accTest=classification.Accuracy(task='binary')
 
 
-def sigmoidKlAnnealing(timeStep,slope=1,start=None):
-    return float(1/(1+np.exp(slope*(start-float(timeStep)))))
-    
 
-def anomalyCheck(epoch):
-    for b,(x,y) in enumerate(anomalyset):
-        x,y=x.to(DEVICE),y.to(DEVICE)
 
 def savingModel(Epoch,model,loss,optimiser,Path):
 
@@ -225,7 +229,7 @@ def trainingLoop():
         trRec,trKL,trTot=trainingStep(E,BETA)
         vlRec,vlKL,vlTot=validationStep(E,BETA)
         thresh=retrievePercentiel(None,0.95)
-        acc,prec,rec=anomalyCheck(E,None,thresh)
+        acc,prec,rec=anomalyCheck(E,None,thresh,anomalyset,accuracyMetric,precisionMetric,recallMetric)
         #append the values to array to use in charts later
         trainReconL.append(trRec)
         trainKLL.append(trKL)
@@ -257,35 +261,36 @@ def retrievePercentiel(modelFillePath,percentile=0.95):
     AnomalyVAE.eval()
 
     listReconLoss=[]
-    for batch,x in enumerate(validSet):
+    with torch.no_grad():
+        for batch,x in enumerate(validSet):
 
-        x=x.to(DEVICE)
+            x=x.to(DEVICE)
 
-        xReconed,mu,sigman=AnomalyVAE(x)
+            xReconed,mu,sigman=AnomalyVAE(x)
 
-        #get the reconstruction loss for the  batch of images
-        reconLoss=lossThresh(xReconed,x)
-        #Reduce to be reconstruction loss for one image
+            #get the reconstruction loss for the  batch of images
+            reconLoss=lossThresh(xReconed,x)
+            #Reduce to be reconstruction loss for one image
 
-        #beacause redeuce is none end up with loss for ever pixel in every chanell etc
-        #so flatten it all down to 1 massive tensor dim
-        #sum up on that dim  then we end up with the recon loss for eahc iamge in the batch
-        perImageLoss=reconLoss.flatten(1).sum(dim=1)
+            #beacause redeuce is none end up with loss for ever pixel in every chanell etc
+            #so flatten it all down to 1 massive tensor dim
+            #sum up on that dim  then we end up with the recon loss for eahc iamge in the batch
+            perImageLoss=reconLoss.flatten(1).sum(dim=1)
 
-        listReconLoss.append(perImageLoss)
+            listReconLoss.append(perImageLoss)
 
 
-    #take arrays of loss and put them in one lonnnng tensor
+        #take arrays of loss and put them in one lonnnng tensor
 
-    allReconLoss=torch.cat(listReconLoss)
+        allReconLoss=torch.cat(listReconLoss)
 
-    threshold=torch.quantile(allReconLoss,percentile)
+        threshold=torch.quantile(allReconLoss,percentile)
     return threshold
 
 
 
 
-def anomalyCheck(epoch,modelFillePath,threshhold):
+def anomalyCheck(epoch,modelFillePath,threshhold,dataset,accuracy):
 
     if modelFillePath is not None:
         loadDict=torch.load(modelFillePath,map_location=DEVICE)
@@ -296,7 +301,7 @@ def anomalyCheck(epoch,modelFillePath,threshhold):
 
     preds=[]
     true=[]
-    for batch,(x,y) in enumerate(anomalyset):
+    for batch,(x,y) in enumerate(dataset):
 
     
         x=x.to(DEVICE)
@@ -329,13 +334,11 @@ def anomalyCheck(epoch,modelFillePath,threshhold):
     true=torch.tensor(true)
 
     #get the metric
-    accuracyMetric.update(preds,true)
-    precisionMetric.update(preds,true)
-    recallMetric.update(preds,true)
+    accuracy.update(preds,true)
 
-    acc=accuracyMetric.compute().item()
-    recall=recallMetric.compute().item()
-    precision=precisionMetric.compute().item()
+    acc=accuracy.compute().item()
+    recall=recall_score(true,preds,pos_label=0)
+    precision=precision_score(true,preds,pos_label=0)
 
 
 
@@ -368,29 +371,16 @@ def sampling(epoch,numSave=5):
         x=x.to(DEVICE)
         z = torch.randn(BATCHSIZE, LATENTDIM)  # sample from gaus normal and see if we can get good looking recons
         z=z.to(DEVICE)
-        x_generated,mu,sigma = AnomalyVAE(x) 
+        xGenerated,mu,sigma = AnomalyVAE(x) 
  
 
-        output=x_generated.view(-1,3,224,224)
+        output=xGenerated.view(-1,3,224,224)
 
-        n=5
-        fig,axes=plt.subplots(2,n,figsize=(15,16))
+
 
         x=x.cpu()
         output=output.cpu()
             
-        for i in range(n):
-            axes[0, i].imshow(x[i].permute(1, 2, 0))      # original
-            axes[0, i].set_title("Original")
-            axes[0, i].axis('off')
-
-            axes[1, i].imshow(output[i].permute(1, 2, 0))  # reconstruction
-            axes[1, i].set_title("Reconstructed")
-            axes[1, i].axis('off')
-
-        plt.tight_layout()
-        plt.savefig("recon_check.png")
-        plt.clf()
         save_image(output,f"Generated{epoch}.png")
 
         randomSample=AnomalyVAE.decoder(z)
@@ -402,9 +392,9 @@ def sampling(epoch,numSave=5):
 
 
 
-trainingLoop()
-sampling(210)
+#trainingLoop()
+#sampling(210)
 t=retrievePercentiel('bestModel.tar',0.95)
-anomalyCheck(None,'bestModel.tar',t)
+anomalyCheck(None,'bestModel.tar',t,anomalHolSet,accTest)
 
    

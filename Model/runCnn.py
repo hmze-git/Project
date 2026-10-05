@@ -46,10 +46,12 @@ transformValid=v2.Compose([
 trainDatasetLoad=datasets.ImageFolder(r'C:\Users\Hamzah\Desktop\HYP\Dataset\AI\processCNN\train',transformTrain)
 validationDatasetLoad=datasets.ImageFolder(r'C:\Users\Hamzah\Desktop\HYP\Dataset\AI\processCNN\validation',transformValid)
 
+anomalyHoldoutsetLoad=datasets.ImageFolder(r'C:\Users\Hamzah\Desktop\HYP\Dataset\AI\testGuac(Processed)',transformValid)
 
 
 trainSet=DataLoader(trainDatasetLoad,batch_size=BATCHSIZE,shuffle=True)
 validSet=DataLoader(validationDatasetLoad,batch_size=BATCHSIZE,shuffle=False)
+anomalHolSet=DataLoader(anomalyHoldoutsetLoad,batch_size=BATCHSIZE,shuffle=True)
 
 
 
@@ -66,8 +68,6 @@ validLossFn=torch.nn.CrossEntropyLoss()
 
 optimiser=Adam(anomCNN.parameters(),lr=LR)
 
-lrScheduler=ReduceLROnPlateau(optimizer=optimiser,mode='min',patience=20,factor=0.5)
-
 
 
 #TODEVICE
@@ -82,6 +82,11 @@ accuracyMetric=classification.Accuracy(task='binary').to(DEVICE)
 validAccuracyMetric=classification.Accuracy(task='binary').to(DEVICE)
 precisionMetric=classification.Precision(task='binary').to(DEVICE)
 recallMetric=classification.Recall(task='binary').to(DEVICE)
+
+#Test Unseen Set Metrics
+accMet=classification.Accuracy(task='binary').to(DEVICE)
+precMet=classification.Precision(task='binary').to(DEVICE)
+recMet=classification.Recall(task='binary').to(DEVICE)
 
 
 
@@ -163,7 +168,7 @@ def train():
     precision=[]
     recall=[]
 
-    bestValAccuracy=float('inf')
+    bestValLoss=float('inf')
     for E in range(NUMEPOCHS):
         epochAccuracy,epochValAccuracy,epochPrecision,epochRecall,acummTrainLoss,acummValidLoss =trainStep(E)
 
@@ -176,9 +181,9 @@ def train():
         recall.append(epochRecall.cpu().item())
 
 
-        if epochValAccuracy<bestValAccuracy:
+        if acummValidLoss<bestValLoss:
             savingModel(E,anomCNN,validLoss,optimiser,'trainCNN.tar')
-            bestValAccuracy=epochValAccuracy
+            bestValLoss=acummValidLoss
 
     plotChart('Epoch','Loss','CNN Train Vs Val Loss',trainLoss,validLoss,['train','val'],'TrainVsValLossCNN.png')
     plotChart('Epoch','Accuracy','CNN Train Vs Val Accuracy',trainAcc,validAcc,['train','val'],'TrainVsValACCCNN.png')
@@ -186,14 +191,16 @@ def train():
     plotChart("Epoch",'Recall',"CNN Recall Curve",recall,[],['Recall'],'recall.png')
 
 
-def finalTest():
+def finalTest(modelFillePath,dataset,accuracy,precision,recall):
 
-
+    if modelFillePath is not None:
+            loadDict=torch.load(modelFillePath,map_location=DEVICE)
+            anomCNN.load_state_dict(loadDict['modelStateDict'])
    
 
     yPreds=[]
     yTrue=[]
-    for batch,(x,y) in enumerate(validSet):
+    for batch,(x,y) in enumerate(dataset):
 
     
         x=x.to(DEVICE)
@@ -204,13 +211,28 @@ def finalTest():
         yPreds.extend(indices.cpu().tolist())
         yTrue.extend(y.cpu().tolist())
 
+        if accuracy is not None:
+             #get the metric
+            accuracy.update(indices,y)
+            precision.update(indices,y)
+            recall.update(indices,y)
+            
+            
+            
 
-        confMatrix=confusion_matrix(yTrue,yPreds,labels=[0,1])
-        disp=ConfusionMatrixDisplay(confMatrix,display_labels=[0,1])
-        disp.plot(cmap='Blues')
-        plt.savefig('confMat.png')
-        plt.show()
-        plt.clf()
+    confMatrix=confusion_matrix(yTrue,yPreds,labels=[0,1])
+    disp=ConfusionMatrixDisplay(confMatrix,display_labels=[0,1])
+    disp.plot(cmap='Blues')
+    plt.savefig('confMat.png')
+    plt.show()
+    plt.clf()
 
+
+    if accuracy is not None:
+        acc=accuracy.compute().item()
+        rec=recall.compute().item()
+        prec=precision.compute().item()
+        print(f"Peak -> Accuracy:{acc} | Precision:{prec} | Recall:{rec}")
 train()
-finalTest()
+#finalTest(None,validSet,None,None,None)
+#inalTest('trainCNN.tar',anomalHolSet,accMet,precMet,recMet)
